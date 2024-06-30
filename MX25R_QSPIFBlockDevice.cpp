@@ -15,11 +15,11 @@
  * limitations under the License.
  */
 
-#include "blockdevice/PowerManagementBlockDevice.h"
+#include "MX25R_QSPIFBlockDevice.h"
 #include "platform/mbed_error.h"
 
-#if COMPONENT_QSPIF
-#include "drivers/QSPI.h"
+#include "mbed_wait_api.h"
+
 #define QSPI_CMD_WREN    0x06
 #define QSPI_CMD_RDCR0   0x15
 #define QSPI_CMD_WRSR    0x01
@@ -28,172 +28,74 @@
 #define QSPI_CMD_DP      0xB9
 #define QSPI_LH_BIT_MASK   0x02
 
-mbed::QSPI _qspif(MBED_CONF_QSPIF_QSPI_IO0,
-                  MBED_CONF_QSPIF_QSPI_IO1,
-                  MBED_CONF_QSPIF_QSPI_IO2,
-                  MBED_CONF_QSPIF_QSPI_IO3,
-                  MBED_CONF_QSPIF_QSPI_SCK,
-                  MBED_CONF_QSPIF_QSPI_CSN,
-                  MBED_CONF_QSPIF_QSPI_POLARITY_MODE);
-#endif
+// Time to delay after sending deep power down command before doing anything else
+#define DEEP_POWERDOWN_DELAY_TIME_US 40
 
-namespace mbed {
+// Time to wait for the device to exit deep powerdown mode
+#define DEEP_POWERDOWN_RECOVERY_TIME_US 35
 
-PowerManagementBlockDevice::PowerManagementBlockDevice(BlockDevice *bd)
-    : _bd(bd)
+namespace mbed
 {
-    MBED_ASSERT(_bd);
-}
 
-PowerManagementBlockDevice::~PowerManagementBlockDevice()
+int MX25R_QSPIFBlockDevice::switch_power_management_mode(PowerMode pm_mode, float new_spi_freq)
 {
-    deinit();
-}
-
-int PowerManagementBlockDevice::init()
-{
-    return _bd->init();
-}
-
-int PowerManagementBlockDevice::deinit()
-{
-    return _bd->deinit();
-}
-
-int PowerManagementBlockDevice::sync()
-{
-    return _bd->sync();
-}
-
-int PowerManagementBlockDevice::read(void *buffer, bd_addr_t addr, bd_size_t size)
-{
-    return _bd->read(buffer, addr, size);
-}
-
-int PowerManagementBlockDevice::program(const void *buffer, bd_addr_t addr, bd_size_t size)
-{
-    return _bd->program(buffer, addr, size);
-}
-
-int PowerManagementBlockDevice::erase(bd_addr_t addr, bd_size_t size)
-{
-    return _bd->erase(addr, size);
-}
-
-bd_size_t PowerManagementBlockDevice::get_read_size() const
-{
-    return _bd->get_read_size();
-}
-
-bd_size_t PowerManagementBlockDevice::get_program_size() const
-{
-    return _bd->get_program_size();
-}
-
-bd_size_t PowerManagementBlockDevice::get_erase_size() const
-{
-    return _bd->get_erase_size();
-}
-
-bd_size_t PowerManagementBlockDevice::get_erase_size(bd_addr_t addr) const
-{
-    return _bd->get_erase_size(addr);
-}
-
-int PowerManagementBlockDevice::get_erase_value() const
-{
-    return _bd->get_erase_value();
-}
-
-bd_size_t PowerManagementBlockDevice::size() const
-{
-    return _bd->size();
-}
-
-const char *PowerManagementBlockDevice::get_type() const
-{
-    if (_bd != NULL) {
-        return _bd->get_type();
-    }
-
-    return NULL;
-}
-
-int PowerManagementBlockDevice::switch_power_management_mode(int pm_mode)
-{
-#if COMPONENT_QSPIF
-    qspi_status_t status = QSPI_STATUS_OK ;
     uint8_t wren_inst = QSPI_CMD_WREN;
     uint8_t sr_reg[3] = {0};
     uint8_t rdcr_inst = QSPI_CMD_RDCR0, wrsr_inst = QSPI_CMD_WRSR, rdsr_inst = QSPI_CMD_RDSR;
-    uint8_t dp_inst = 0;
 
-    if (QSPI_STATUS_OK != _qspif.configure_format(QSPI_CFG_BUS_SINGLE, QSPI_CFG_BUS_SINGLE, QSPI_CFG_ADDR_SIZE_24, QSPI_CFG_BUS_SINGLE,
-                                                  0, QSPI_CFG_BUS_SINGLE, 0)) {
-        return -1;
+    if (QSPI_STATUS_OK != _qspi.command_transfer(wren_inst, -1, NULL, 0, NULL, 0)) {
+        return QSPIF_BD_ERROR_DEVICE_ERROR;
     }
 
-    if (QSPI_STATUS_OK != _qspif.command_transfer(wren_inst, -1, NULL, 0, NULL, 0)) {
-        return -1;
+    // Read status register and configuration registers
+    if (QSPI_STATUS_OK != _qspi.command_transfer(rdsr_inst, -1, NULL, 0, (const char *)&sr_reg[0], 1)) {
+        return QSPIF_BD_ERROR_DEVICE_ERROR;
+    }
+
+    if (QSPI_STATUS_OK != _qspi.command_transfer(rdcr_inst, -1, NULL, 0, (const char *)&sr_reg[1], 2)) {
+        return QSPIF_BD_ERROR_DEVICE_ERROR;
     }
 
     switch (pm_mode) {
-        case QSPIF_HIGH_PERFORMANCE_MODE :
-            if (QSPI_STATUS_OK != _qspif.command_transfer(rdsr_inst, -1, NULL, 0, (const char *)&sr_reg[0], 1)) {
-                return -1;
-            }
-
-            if (QSPI_STATUS_OK != _qspif.command_transfer(rdcr_inst, -1, NULL, 0, (const char *)&sr_reg[1], 2)) {
-                return -1;
-            }
-
-            sr_reg[2] = QSPI_LH_BIT_MASK;
-
-            if (QSPI_STATUS_OK != _qspif.command_transfer(wrsr_inst, -1, (const char *)&sr_reg[0], 3, NULL, 0)) {
-                return -1;
-            }
+        case HIGH_PERFORMANCE:
+            sr_reg[2] |= QSPI_LH_BIT_MASK;
             break;
-        case QSPIF_LOW_POWER_MODE :
-            if (QSPI_STATUS_OK != _qspif.command_transfer(rdsr_inst, -1, NULL, 0, (const char *)&sr_reg[0], 1)) {
-                return -1;
-            }
-
-            if (QSPI_STATUS_OK != _qspif.command_transfer(rdcr_inst, -1, NULL, 0, (const char *)&sr_reg[1], 2)) {
-                return -1;
-            }
-
-            sr_reg[2] = 0;
-
-            if (QSPI_STATUS_OK != _qspif.command_transfer(wrsr_inst, -1, (const char *)&sr_reg[0], 3, NULL, 0)) {
-                return -1;
-            }
+        case LOW_POWER:
+            sr_reg[2] &= ~QSPI_LH_BIT_MASK;
             break;
-        case QSPIF_DEEP_DOWN_MODE :
-            dp_inst = QSPI_CMD_DP;
-            if (QSPI_STATUS_OK != _qspif.command_transfer(dp_inst, -1, NULL, 0, NULL, 0)) {
-                return -1;
-            }
-
-            for (int i, k = 0; i < 10000; i++) {
-                k++;
-            }
-            break;
-        case QSPIF_STANDBY_MODE :
-            dp_inst = QSPI_CMD_NOP;
-            if (QSPI_STATUS_OK != _qspif.command_transfer(dp_inst, -1, NULL, 0, NULL, 0)) {
-                return -1;
-            }
-
-            for (int i, k = 0; i < 10000; i++) {
-                k++;
-            }
-            break;
-        default :
-            break;
+        default:
+            return QSPIF_BD_ERROR_INVALID_ARGUMENT;
     }
 
-    return 0;
-#endif
+    // Write new status register + configuration register values
+    if (QSPI_STATUS_OK != _qspi.command_transfer(wrsr_inst, -1, (const char *)&sr_reg[0], 3, NULL, 0)) {
+        return QSPIF_BD_ERROR_DEVICE_ERROR;
+    }
+
+    return QSPIF_BD_ERROR_OK;
+}
+
+int mbed::MX25R_QSPIFBlockDevice::enter_deep_powerdown()
+{
+    if (QSPI_STATUS_OK != _qspi.command_transfer(QSPI_CMD_DP, -1, NULL, 0, NULL, 0)) {
+        return QSPIF_BD_ERROR_DEVICE_ERROR;
+    }
+
+    wait_us(DEEP_POWERDOWN_DELAY_TIME_US);
+
+    return QSPIF_BD_ERROR_OK;
+}
+
+int mbed::MX25R_QSPIFBlockDevice::exit_deep_powerdown()
+{
+    // Just need to toggle CS for >20ns in order to wake it up.
+    if (QSPI_STATUS_OK != _qspi.command_transfer(QSPI_CMD_NOP, -1, NULL, 0, NULL, 0)) {
+        return QSPIF_BD_ERROR_DEVICE_ERROR;
+    }
+
+    wait_us(DEEP_POWERDOWN_RECOVERY_TIME_US);
+
+    return QSPIF_BD_ERROR_OK;
 }
 
 } // namespace mbed

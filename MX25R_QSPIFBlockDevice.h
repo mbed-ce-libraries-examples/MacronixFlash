@@ -20,132 +20,54 @@
 
 #include "BlockDevice.h"
 #include "platform/mbed_assert.h"
+#include "QSPIF/QSPIFBlockDevice.h"
 
-#if COMPONENT_QSPIF
-enum {
-    QSPIF_HIGH_PERFORMANCE_MODE,
-    QSPIF_LOW_POWER_MODE,
-    QSPIF_DEEP_DOWN_MODE,
-    QSPIF_STANDBY_MODE,
-};
-#endif
+
 
 namespace mbed {
 
-class PowerManagementBlockDevice : public BlockDevice {
+/**
+ * @brief Driver for MX25R family QSPI flashes.  Adds power management features.
+ */
+class MX25R_QSPIFBlockDevice : public QSPIFBlockDevice {
 public:
 
-    /** Lifetime of the block device
-     *
-     * @param bd        Block device to wrap as read only
-     */
-    PowerManagementBlockDevice(BlockDevice *bd);
+    // Inherit constructor from QSPIFBlockDevice
+    using QSPIFBlockDevice::QSPIFBlockDevice;
 
-    virtual ~PowerManagementBlockDevice();
+    /// Possible power modes that the flash can be in
+    enum PowerMode {
+        HIGH_PERFORMANCE, ///< Flash runs at full speed
+        LOW_POWER ///< Clock speed is limited, but power consumption is decreased by 30-50%
+    };
 
-    /** Initialize a block device
+    /**
+     * @brief Switch the Block Device power management mode
      *
-     *  @return         0 on success or a negative error code on failure
+     * This sets the flash to run in high performance or low power mode.
+     * Since the power mode is changing, you will need to consult your datasheet
+     * to find the correct frequency to run the flash at in this power mode.
+     *
+     * @param pm_mode Power management mode of Block Device
+     * @param new_spi_freq New SPI frequency to set in Hz
+     * @return 0 on success, negative error code on failure
      */
-    virtual int init();
+    virtual int switch_power_management_mode(PowerMode pm_mode, float new_spi_freq);
 
-    /** Deinitialize a block device
+    /**
+     * @brief Enter deep power down mode.  Standby current will be reduced
+     * significantly, but no other commands can be used until exit_deep_powerdown() is called.
      *
-     *  @return         0 on success or a negative error code on failure
+     * @return 0 on success, negative error code on failure
      */
-    virtual int deinit();
+    virtual int enter_deep_powerdown();
 
-    /** Ensure data on storage is in sync with the driver
+    /**
+     * @brief Exit deep power down mode.
      *
-     *  @return         0 on success or a negative error code on failure
+     * @return 0 on success, negative error code on failure
      */
-    virtual int sync();
-
-    /** Read blocks from a block device
-     *
-     *  @param buffer   Buffer to read blocks into
-     *  @param addr     Address of block to begin reading from
-     *  @param size     Size to read in bytes, must be a multiple of read block size
-     *  @return         0 on success, negative error code on failure
-     */
-    virtual int read(void *buffer, bd_addr_t addr, bd_size_t size);
-
-    /** Program blocks to a block device
-     *
-     *  The blocks must have been erased prior to being programmed
-     *
-     *  @param buffer   Buffer of data to write to blocks
-     *  @param addr     Address of block to begin writing to
-     *  @param size     Size to write in bytes, must be a multiple of program block size
-     *  @return         0 on success, negative error code on failure
-     */
-    virtual int program(const void *buffer, bd_addr_t addr, bd_size_t size);
-
-    /** Erase blocks on a block device
-     *
-     *  The state of an erased block is undefined until it has been programmed,
-     *  unless get_erase_value returns a non-negative byte value
-     *
-     *  @param addr     Address of block to begin erasing
-     *  @param size     Size to erase in bytes, must be a multiple of erase block size
-     *  @return         0 on success, negative error code on failure
-     */
-    virtual int erase(bd_addr_t addr, bd_size_t size);
-
-    /** Get the size of a readable block
-     *
-     *  @return         Size of a readable block in bytes
-     */
-    virtual bd_size_t get_read_size() const;
-
-    /** Get the size of a programmable block
-     *
-     *  @return         Size of a programmable block in bytes
-     */
-    virtual bd_size_t get_program_size() const;
-
-    /** Get the size of an erasable block
-     *
-     *  @return         Size of an erasable block in bytes
-     */
-    virtual bd_size_t get_erase_size() const;
-
-    /** Get the size of an erasable block given address
-     *
-     *  @param addr     Address within the erasable block
-     *  @return         Size of an erasable block in bytes
-     *  @note Must be a multiple of the program size
-     */
-    virtual bd_size_t get_erase_size(bd_addr_t addr) const;
-
-    /** Get the value of storage when erased
-     *
-     *  If get_erase_value returns a non-negative byte value, the underlying
-     *  storage is set to that value when erased, and storage containing
-     *  that value can be programmed without another erase.
-     *
-     *  @return         The value of storage when erased, or -1 if you can't
-     *                  rely on the value of erased storage
-     */
-    virtual int get_erase_value() const;
-
-    /** Get the total size of the underlying device
-     *
-     *  @return         Size of the underlying device in bytes
-     */
-    virtual bd_size_t size() const;
-
-    /** Get the BlockDevice class type.
-     *
-     *  @return         A string represent the BlockDevice class type.
-     */
-    virtual const char *get_type() const;
-
-    /** Switch the Block Device power management mode
-     *  @param pm_mode   Power management mode of Block Device
-     *  @return          0 on success, negative error code on failure
-     */
-    virtual int switch_power_management_mode(int pm_mode);
+    virtual int exit_deep_powerdown();
 
 private:
     BlockDevice *_bd;
@@ -155,7 +77,7 @@ private:
 
 // Added "using" for backwards compatibility
 #ifndef MBED_NO_GLOBAL_USING_DIRECTIVE
-using mbed::PowerManagementBlockDevice;
+using mbed::MX25R_QSPIFBlockDevice;
 #endif
 
 #endif

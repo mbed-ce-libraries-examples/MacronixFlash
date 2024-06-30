@@ -16,7 +16,7 @@
  */
 
 #include "platform/Callback.h"
-#include "SPINANDBlockDevice.h"
+#include "MX3x_SPINANDBlockDevice.h"
 #include <string.h>
 #include "rtos/ThisThread.h"
 #include "bch.h"
@@ -122,14 +122,14 @@ using namespace mbed;
 /* Init function to initialize Different Devices CS static list */
 static PinName *generate_initialized_active_spinand_csel_arr();
 // Static Members for different devices csel
-// _devices_mutex is used to lock csel list - only one SPINANDBlockDevice instance per csel is allowed
-SingletonPtr<rtos::Mutex> SPINANDBlockDevice::_devices_mutex;
-int SPINANDBlockDevice::_number_of_active_spinand_flash_csel = 0;
-PinName *SPINANDBlockDevice::_active_spinand_flash_csel_arr = generate_initialized_active_spinand_csel_arr();
+// _devices_mutex is used to lock csel list - only one MX3x_SPINANDBlockDevice instance per csel is allowed
+SingletonPtr<rtos::Mutex> MX3x_SPINANDBlockDevice::_devices_mutex;
+int MX3x_SPINANDBlockDevice::_number_of_active_spinand_flash_csel = 0;
+PinName *MX3x_SPINANDBlockDevice::_active_spinand_flash_csel_arr = generate_initialized_active_spinand_csel_arr();
 
 /********* Public API Functions *********/
 /****************************************/
-SPINANDBlockDevice::SPINANDBlockDevice(PinName io0, PinName io1, PinName io2, PinName io3, PinName sclk, PinName csel,
+MX3x_SPINANDBlockDevice::MX3x_SPINANDBlockDevice(PinName io0, PinName io1, PinName io2, PinName io3, PinName sclk, PinName csel,
                                        int clock_mode,
                                        int freq)
     :
@@ -140,11 +140,11 @@ SPINANDBlockDevice::SPINANDBlockDevice(PinName io0, PinName io1, PinName io2, Pi
     _unique_device_status = add_new_csel_instance(csel);
 
     if (_unique_device_status == 0) {
-        tr_debug("Adding a new SPINANDBlockDevice csel: %d", (int)csel);
+        tr_debug("Adding a new MX3x_SPINANDBlockDevice csel: %d", (int)csel);
     } else if (_unique_device_status == -1) {
-        tr_error("SPINANDBlockDevice with the same csel(%d) already exists", (int)csel);
+        tr_error("MX3x_SPINANDBlockDevice with the same csel(%d) already exists", (int)csel);
     } else {
-        tr_error("Too many different SPINANDBlockDevice devices - max allowed: %d", SPINAND_MAX_ACTIVE_FLASH_DEVICES);
+        tr_error("Too many different MX3x_SPINANDBlockDevice devices - max allowed: %d", SPINAND_MAX_ACTIVE_FLASH_DEVICES);
     }
 
     // Default Bus Setup 1_1_1 with 0 dummy and mode cycles
@@ -160,17 +160,17 @@ SPINANDBlockDevice::SPINANDBlockDevice(PinName io0, PinName io1, PinName io2, Pi
     _program_instruction = SPINAND_INST_PROGRAM_DEFAULT;
 }
 
-int SPINANDBlockDevice::init()
+int MX3x_SPINANDBlockDevice::init()
 {
     int status = SPINAND_BD_ERROR_OK;
 
     if (_unique_device_status == 0) {
-        tr_debug("SPINANDBlockDevice csel: %d", (int)_csel);
+        tr_debug("MX3x_SPINANDBlockDevice csel: %d", (int)_csel);
     } else if (_unique_device_status == -1) {
-        tr_error("SPINANDBlockDevice with the same csel(%d) already exists", (int)_csel);
+        tr_error("MX3x_SPINANDBlockDevice with the same csel(%d) already exists", (int)_csel);
         return SPINAND_BD_ERROR_DEVICE_NOT_UNIQUE;
     } else {
-        tr_error("Too many different SPINANDBlockDevice devices - max allowed: %d", SPINAND_MAX_ACTIVE_FLASH_DEVICES);
+        tr_error("Too many different MX3x_SPINANDBlockDevice devices - max allowed: %d", SPINAND_MAX_ACTIVE_FLASH_DEVICES);
         return SPINAND_BD_ERROR_DEVICE_MAX_EXCEED;
     }
 
@@ -237,7 +237,7 @@ exit_point:
     return status;
 }
 
-int SPINANDBlockDevice::deinit()
+int MX3x_SPINANDBlockDevice::deinit()
 {
     int result = SPINAND_BD_ERROR_OK;
 
@@ -278,7 +278,7 @@ int SPINANDBlockDevice::deinit()
     return result;
 }
 
-int SPINANDBlockDevice::read(void *buffer, bd_addr_t addr, bd_size_t size)
+int MX3x_SPINANDBlockDevice::read(void *buffer, bd_addr_t addr, bd_size_t size)
 {
     int status = SPINAND_BD_ERROR_OK;
     bool read_failed = false;
@@ -378,7 +378,7 @@ exit_point:
     return status;
 }
 
-int SPINANDBlockDevice::program(const void *buffer, bd_addr_t addr, bd_size_t size)
+int MX3x_SPINANDBlockDevice::program(const void *buffer, bd_addr_t addr, bd_size_t size)
 {
     qspi_status_t result = QSPI_STATUS_OK;
     bool program_failed = false;
@@ -469,7 +469,7 @@ exit_point:
     return status;
 }
 
-int SPINANDBlockDevice::erase(bd_addr_t addr, bd_size_t size)
+int MX3x_SPINANDBlockDevice::erase(bd_addr_t addr, bd_size_t size)
 {
     bool erase_failed = false;
     int status = SPINAND_BD_ERROR_OK;
@@ -529,7 +529,7 @@ exit_point:
     return status;
 }
 
-bool SPINANDBlockDevice::is_bad_block(uint16_t blk_idx)
+bool MX3x_SPINANDBlockDevice::is_bad_block(uint16_t blk_idx)
 {
     mbed::bd_addr_t addr;
     uint8_t mark[2];
@@ -542,7 +542,7 @@ bool SPINANDBlockDevice::is_bad_block(uint16_t blk_idx)
     return (mark[0] != 0xff || mark[1] != 0xff) ? 1 : 0;
 }
 
-int SPINANDBlockDevice::mark_bad_block(uint16_t blk_idx)
+int MX3x_SPINANDBlockDevice::mark_bad_block(uint16_t blk_idx)
 {
     int status = SPINAND_BD_ERROR_OK;
     mbed::bd_addr_t addr;
@@ -558,39 +558,39 @@ int SPINANDBlockDevice::mark_bad_block(uint16_t blk_idx)
     return status;
 }
 
-bd_size_t SPINANDBlockDevice::get_read_size() const
+bd_size_t MX3x_SPINANDBlockDevice::get_read_size() const
 {
     // Return minimum read size in bytes for the device
     return _page_size;
 }
 
-bd_size_t SPINANDBlockDevice::get_program_size() const
+bd_size_t MX3x_SPINANDBlockDevice::get_program_size() const
 {
     // Return minimum program/write size in bytes for the device
     return _page_size;
 }
 
-bd_size_t SPINANDBlockDevice::get_erase_size() const
+bd_size_t MX3x_SPINANDBlockDevice::get_erase_size() const
 {
     return _block_size;
 }
 
-bd_size_t SPINANDBlockDevice::get_erase_size(bd_addr_t addr) const
+bd_size_t MX3x_SPINANDBlockDevice::get_erase_size(bd_addr_t addr) const
 {
     return _block_size;
 }
 
-const char *SPINANDBlockDevice::get_type() const
+const char *MX3x_SPINANDBlockDevice::get_type() const
 {
     return "SPINAND";
 }
 
-bd_size_t SPINANDBlockDevice::size() const
+bd_size_t MX3x_SPINANDBlockDevice::size() const
 {
     return _flash_size;
 }
 
-int SPINANDBlockDevice::get_erase_value() const
+int MX3x_SPINANDBlockDevice::get_erase_value() const
 {
     return 0xFF;
 }
@@ -607,7 +607,7 @@ static PinName *generate_initialized_active_spinand_csel_arr()
     return init_arr;
 }
 
-int SPINANDBlockDevice::add_new_csel_instance(PinName csel)
+int MX3x_SPINANDBlockDevice::add_new_csel_instance(PinName csel)
 {
     int status = 0;
     _devices_mutex->lock();
@@ -638,7 +638,7 @@ exit_point:
     return status;
 }
 
-int SPINANDBlockDevice::remove_csel_instance(PinName csel)
+int MX3x_SPINANDBlockDevice::remove_csel_instance(PinName csel)
 {
     int status = -1;
     _devices_mutex->lock();
@@ -657,7 +657,7 @@ int SPINANDBlockDevice::remove_csel_instance(PinName csel)
     return status;
 }
 
-bool SPINANDBlockDevice::_read_otp_onfi()
+bool MX3x_SPINANDBlockDevice::_read_otp_onfi()
 {
     uint8_t secur_reg = 0, onfi_table[256];
 
@@ -676,6 +676,10 @@ bool SPINANDBlockDevice::_read_otp_onfi()
         tr_error("Writing Security Register failed");
         return 0;
     }
+
+    // Note: For info about the ONFI parameter page encoding, see the specification:
+    // https://onfi.org/files/onfi_2_0_gold.pdf
+    // Specifically, section 5.6.1.
     if (onfi_table[0] == 'O' && onfi_table[1] == 'N'  && onfi_table[2] == 'F' && onfi_table[3] == 'I') {
         tr_info("ONFI table found\n");
         memcpy(_name, &onfi_table[32], sizeof(_name));
@@ -752,7 +756,7 @@ bool SPINANDBlockDevice::_read_otp_onfi()
     return 1;
 }
 
-int SPINANDBlockDevice::_read_oob(void *buffer, bd_addr_t addr, bd_size_t size)
+int MX3x_SPINANDBlockDevice::_read_oob(void *buffer, bd_addr_t addr, bd_size_t size)
 {
     int status = SPINAND_BD_ERROR_OK;
 
@@ -768,7 +772,7 @@ int SPINANDBlockDevice::_read_oob(void *buffer, bd_addr_t addr, bd_size_t size)
     return status;
 }
 
-int SPINANDBlockDevice::_program_oob(const void *buffer, bd_addr_t addr, bd_size_t size)
+int MX3x_SPINANDBlockDevice::_program_oob(const void *buffer, bd_addr_t addr, bd_size_t size)
 {
     qspi_status_t result = QSPI_STATUS_OK;
     bool program_failed = false;
@@ -799,7 +803,7 @@ exit_point:
     return status;
 }
 
-int SPINANDBlockDevice::_set_quad_enable()
+int MX3x_SPINANDBlockDevice::_set_quad_enable()
 {
     uint8_t secur_reg = 0;
 
@@ -831,7 +835,7 @@ int SPINANDBlockDevice::_set_quad_enable()
     return 0;
 }
 
-int SPINANDBlockDevice::_clear_block_protection()
+int MX3x_SPINANDBlockDevice::_clear_block_protection()
 {
     uint8_t block_protection_reg = 0;
 
@@ -863,7 +867,7 @@ int SPINANDBlockDevice::_clear_block_protection()
     return 0;
 }
 
-int SPINANDBlockDevice::_set_write_enable()
+int MX3x_SPINANDBlockDevice::_set_write_enable()
 {
     // Check Status Register Busy Bit to Verify the Device isn't Busy
     uint8_t status_value = 0;
@@ -897,7 +901,7 @@ int SPINANDBlockDevice::_set_write_enable()
     return status;
 }
 
-int SPINANDBlockDevice::_set_conti_read_enable()
+int MX3x_SPINANDBlockDevice::_set_conti_read_enable()
 {
     uint8_t secur_reg = 0;
 
@@ -929,7 +933,7 @@ int SPINANDBlockDevice::_set_conti_read_enable()
     return 0;
 }
 
-int SPINANDBlockDevice::_set_conti_read_disable()
+int MX3x_SPINANDBlockDevice::_set_conti_read_disable()
 {
     uint8_t secur_reg = 0;
 
@@ -961,7 +965,7 @@ int SPINANDBlockDevice::_set_conti_read_disable()
     return 0;
 }
 
-int SPINANDBlockDevice::_conti_read_exit()
+int MX3x_SPINANDBlockDevice::_conti_read_exit()
 {
     if (QSPI_STATUS_OK !=  _qspi_send_general_command(SPINAND_INST_RESET, QSPI_NO_ADDRESS_COMMAND, NULL, 0, NULL, 0)) {
         tr_error("Sending WREN command FAILED");
@@ -970,7 +974,7 @@ int SPINANDBlockDevice::_conti_read_exit()
     return 0;
 }
 
-bool SPINANDBlockDevice::_is_mem_ready()
+bool MX3x_SPINANDBlockDevice::_is_mem_ready()
 {
     // Check Status Register Busy Bit to Verify the Device isn't Busy
     uint8_t status_value = 0;
@@ -998,12 +1002,12 @@ bool SPINANDBlockDevice::_is_mem_ready()
 /***************************************************/
 /*********** QSPI Driver API Functions *************/
 /***************************************************/
-qspi_status_t SPINANDBlockDevice::_qspi_set_frequency(int freq)
+qspi_status_t MX3x_SPINANDBlockDevice::_qspi_set_frequency(int freq)
 {
     return _qspi.set_frequency(freq);
 }
 
-qspi_status_t SPINANDBlockDevice::_qspi_send_read_command(qspi_inst_t read_inst, void *buffer,
+qspi_status_t MX3x_SPINANDBlockDevice::_qspi_send_read_command(qspi_inst_t read_inst, void *buffer,
                                                           bd_addr_t addr, bd_size_t size)
 {
     tr_debug("Inst: 0x%xh, addr: %llu, size: %llu", read_inst, addr, size);
@@ -1070,7 +1074,7 @@ qspi_status_t SPINANDBlockDevice::_qspi_send_read_command(qspi_inst_t read_inst,
     return QSPI_STATUS_OK;
 }
 
-qspi_status_t SPINANDBlockDevice::_qspi_send_continuous_read_command(qspi_inst_t read_inst, void *buffer,
+qspi_status_t MX3x_SPINANDBlockDevice::_qspi_send_continuous_read_command(qspi_inst_t read_inst, void *buffer,
                                                                      bd_addr_t addr, bd_size_t size)
 {
     tr_debug("Inst: 0x%xh, addr: %llu, size: %llu", read_inst, addr, size);
@@ -1142,7 +1146,7 @@ qspi_status_t SPINANDBlockDevice::_qspi_send_continuous_read_command(qspi_inst_t
     return QSPI_STATUS_OK;
 }
 
-qspi_status_t SPINANDBlockDevice::_qspi_send_program_command(qspi_inst_t prog_inst, const void *buffer,
+qspi_status_t MX3x_SPINANDBlockDevice::_qspi_send_program_command(qspi_inst_t prog_inst, const void *buffer,
                                                              bd_addr_t addr, bd_size_t *size)
 {
     tr_debug("Inst: 0x%xh, addr: %llu, size: %llu", prog_inst, addr, *size);
@@ -1198,7 +1202,7 @@ qspi_status_t SPINANDBlockDevice::_qspi_send_program_command(qspi_inst_t prog_in
     return QSPI_STATUS_OK;
 }
 
-qspi_status_t SPINANDBlockDevice::_qspi_send_erase_command(qspi_inst_t erase_inst, bd_addr_t addr, bd_size_t size)
+qspi_status_t MX3x_SPINANDBlockDevice::_qspi_send_erase_command(qspi_inst_t erase_inst, bd_addr_t addr, bd_size_t size)
 {
     tr_debug("Inst: 0x%xh, addr: %llu, size: %llu", erase_inst, addr, size);
 
@@ -1232,7 +1236,7 @@ qspi_status_t SPINANDBlockDevice::_qspi_send_erase_command(qspi_inst_t erase_ins
     return QSPI_STATUS_OK;
 }
 
-qspi_status_t SPINANDBlockDevice::_qspi_send_general_command(qspi_inst_t instruction, bd_addr_t addr,
+qspi_status_t MX3x_SPINANDBlockDevice::_qspi_send_general_command(qspi_inst_t instruction, bd_addr_t addr,
                                                              const char *tx_buffer, bd_size_t tx_length,
                                                              const char *rx_buffer, bd_size_t rx_length)
 {
@@ -1248,7 +1252,7 @@ qspi_status_t SPINANDBlockDevice::_qspi_send_general_command(qspi_inst_t instruc
     return QSPI_STATUS_OK;
 }
 
-void SPINANDBlockDevice::_bch_init(uint8_t ecc_bits)
+void MX3x_SPINANDBlockDevice::_bch_init(uint8_t ecc_bits)
 {
     unsigned int m, t, i;
     unsigned char *erased_page;
@@ -1301,7 +1305,7 @@ void SPINANDBlockDevice::_bch_init(uint8_t ecc_bits)
     }
 }
 
-void SPINANDBlockDevice::_bch_free()
+void MX3x_SPINANDBlockDevice::_bch_free()
 {
     bch_free(_nbc.bch);
     free(_nbc.errloc);
@@ -1311,7 +1315,7 @@ void SPINANDBlockDevice::_bch_free()
     free(_ecc_code);
 }
 
-int SPINANDBlockDevice::_bch_calculate_ecc(unsigned char *buf, unsigned char *code)
+int MX3x_SPINANDBlockDevice::_bch_calculate_ecc(unsigned char *buf, unsigned char *code)
 {
 
     memset(code, 0, _ecc_bytes);
