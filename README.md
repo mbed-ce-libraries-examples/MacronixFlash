@@ -13,5 +13,5 @@ This library provides extended support for Macronix flash ICs in Mbed OS.  It pr
 4. Link the `MacronixFlash` library to the code for your application.
 5. You can now include the headers and instantate the classes in this library!
 
-### Status:
+## Status:
 Library has been converted from PRs by Macronix ([1](https://github.com/mbed-ce/mbed-os/pull/284)) ([2](https://github.com/mbed-ce/mbed-os/pull/258)) into its own repo.  This code has not been tested on real hardware, but the original version was by Macronix.
